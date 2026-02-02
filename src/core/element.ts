@@ -14,8 +14,12 @@ export function createElement(
   return {
     type,
     props: rest,
-    key: isValidKey(key) ? key : null,
+    key: coerceKey(key),
   }
+}
+
+export function coerceKey(value: unknown): Key | null {
+  return typeof value === 'string' || typeof value === 'number' ? value : null
 }
 
 export function createTextElement(value: string | number): VNode {
@@ -56,8 +60,4 @@ export function isVNode(value: unknown): value is VNode {
 
 function isRenderableNode(child: ElementChildren): child is VNode {
   return child !== null && child !== undefined && typeof child !== 'boolean'
-}
-
-function isValidKey(value: unknown): value is Key {
-  return typeof value === 'string' || typeof value === 'number'
 }
