@@ -19,5 +19,11 @@ export default tseslint.config(
     files: ['**/*.js'],
     ...tseslint.configs.disableTypeChecked,
   },
+  {
+    files: ['src/shared/jsx-types.ts'],
+    rules: {
+      '@typescript-eslint/no-namespace': 'off',
+    },
+  },
   prettier,
 )

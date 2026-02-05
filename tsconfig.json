@@ -4,6 +4,13 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "mini-react",
+    "paths": {
+      "mini-react": ["./src/index.ts"],
+      "mini-react/jsx-runtime": ["./src/jsx-runtime.ts"],
+      "mini-react/jsx-dev-runtime": ["./src/jsx-dev-runtime.ts"]
+    },
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
