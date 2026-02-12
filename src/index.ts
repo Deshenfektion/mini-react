@@ -5,6 +5,8 @@ export {
   normalizeChildren,
 } from './core/element'
 export { Fragment } from './core/jsx'
+export { createRoot } from './renderer/root'
+export type { Root } from './renderer/root'
 export { FRAGMENT, TEXT_ELEMENT } from './shared/symbols'
 export type {
   ElementChild,
