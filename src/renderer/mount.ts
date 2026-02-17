@@ -1,6 +1,6 @@
 import { setProperty } from '../dom/properties'
 import { FRAGMENT, TEXT_ELEMENT } from '../shared/symbols'
-import type { Props, VNode } from '../shared/types'
+import type { FunctionComponent, Props, VNode } from '../shared/types'
 
 export function mountVNode(vnode: VNode, parent: Node): void {
   const { type } = vnode
@@ -19,7 +19,10 @@ export function mountVNode(vnode: VNode, parent: Node): void {
     parent.appendChild(dom)
     return
   }
-  throw new TypeError('Function components are not supported yet')
+  const rendered = (type as FunctionComponent)(vnode.props)
+  if (rendered) {
+    mountVNode(rendered, parent)
+  }
 }
 
 function mountChildren(children: VNode[] | undefined, parent: Node): void {
