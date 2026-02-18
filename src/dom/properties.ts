@@ -1,15 +1,57 @@
+import type { Props } from '../shared/types'
+
 export function setProperty(dom: HTMLElement, name: string, value: unknown): void {
+  updateProperty(dom, name, undefined, value)
+}
+
+export function updateProperty(
+  dom: HTMLElement,
+  name: string,
+  prev: unknown,
+  next: unknown,
+): void {
   if (name === 'style') {
-    applyStyle(dom, value)
-  } else if (isEventProp(name, value)) {
-    dom.addEventListener(eventNameOf(name), value)
+    applyStyle(dom, next)
+  } else if (isEventLikeProp(name, prev, next)) {
+    if (isEventProp(name, prev)) {
+      dom.removeEventListener(eventNameOf(name), prev)
+    }
+    if (isEventProp(name, next)) {
+      dom.addEventListener(eventNameOf(name), next)
+    }
   } else if (name === 'className') {
-    setAttributeValue(dom, 'class', value)
+    setAttributeValue(dom, 'class', next)
   } else if (name === 'value' || name === 'checked') {
-    assignDomProperty(dom, name, value)
+    assignDomProperty(dom, name, next)
   } else {
-    setAttributeValue(dom, name, value)
+    setAttributeValue(dom, name, next)
   }
+}
+
+export function diffProperties(dom: HTMLElement, prev: Props, next: Props): void {
+  for (const name of Object.keys(prev)) {
+    if (name !== 'children' && !(name in next)) {
+      updateProperty(dom, name, prev[name], undefined)
+    }
+  }
+  for (const name of Object.keys(next)) {
+    if (name === 'children') {
+      continue
+    }
+    const prevValue = prev[name]
+    const nextValue = next[name]
+    if (prevValue !== nextValue) {
+      updateProperty(dom, name, prevValue, nextValue)
+    }
+  }
+}
+
+function isEventLikeProp(name: string, prev: unknown, next: unknown): boolean {
+  return (
+    name.length > 2 &&
+    name.startsWith('on') &&
+    (typeof prev === 'function' || typeof next === 'function')
+  )
 }
 
 export function isEventProp(name: string, value: unknown): value is EventListener {

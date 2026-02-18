@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { eventNameOf, isEventProp, setProperty } from '../../src/dom/properties'
+import {
+  diffProperties,
+  eventNameOf,
+  isEventProp,
+  setProperty,
+  updateProperty,
+} from '../../src/dom/properties'
 
 function makeDiv(): HTMLElement {
   return document.createElement('div')
@@ -82,6 +88,70 @@ describe('setProperty', () => {
     dom.dispatchEvent(new Event('click'))
     dom.dispatchEvent(new Event('click'))
     expect(clicks).toBe(2)
+  })
+})
+
+describe('updateProperty', () => {
+  it('replaces an event listener without stacking', () => {
+    const dom = makeDiv()
+    let firstCalls = 0
+    let secondCalls = 0
+    const first = () => {
+      firstCalls += 1
+    }
+    const second = () => {
+      secondCalls += 1
+    }
+    updateProperty(dom, 'onClick', undefined, first)
+    updateProperty(dom, 'onClick', first, second)
+    dom.dispatchEvent(new Event('click'))
+    expect(firstCalls).toBe(0)
+    expect(secondCalls).toBe(1)
+  })
+
+  it('removes an event listener when the next value is gone', () => {
+    const dom = makeDiv()
+    let calls = 0
+    const handler = () => {
+      calls += 1
+    }
+    updateProperty(dom, 'onClick', undefined, handler)
+    updateProperty(dom, 'onClick', handler, undefined)
+    dom.dispatchEvent(new Event('click'))
+    expect(calls).toBe(0)
+  })
+
+  it('replaces the full style declaration', () => {
+    const dom = makeDiv()
+    updateProperty(dom, 'style', undefined, { color: 'red', margin: '4px' })
+    updateProperty(dom, 'style', { color: 'red', margin: '4px' }, { color: 'blue' })
+    expect(dom.style.color).toBe('blue')
+    expect(dom.style.margin).toBe('')
+  })
+})
+
+describe('diffProperties', () => {
+  it('removes props absent from the next render', () => {
+    const dom = makeDiv()
+    diffProperties(dom, {}, { id: 'a', title: 'x' })
+    diffProperties(dom, { id: 'a', title: 'x' }, { id: 'a' })
+    expect(dom.getAttribute('id')).toBe('a')
+    expect(dom.hasAttribute('title')).toBe(false)
+  })
+
+  it('updates only changed props', () => {
+    const dom = makeDiv()
+    diffProperties(dom, {}, { id: 'a', lang: 'en' })
+    dom.setAttribute('id', 'mutated-outside')
+    diffProperties(dom, { id: 'a', lang: 'en' }, { id: 'a', lang: 'de' })
+    expect(dom.getAttribute('id')).toBe('mutated-outside')
+    expect(dom.getAttribute('lang')).toBe('de')
+  })
+
+  it('ignores the children prop', () => {
+    const dom = makeDiv()
+    diffProperties(dom, {}, { children: [] })
+    expect(dom.attributes).toHaveLength(0)
   })
 })
 
