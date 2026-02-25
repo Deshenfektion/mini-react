@@ -9,8 +9,9 @@ Under active development. Current progress:
 - [x] Element model: `createElement`, virtual node tree, child normalization
 - [x] JSX runtime (automatic transform: `jsx`, `jsxs`, `Fragment`)
 - [x] DOM renderer (initial mount: host elements, text, fragments, props, listeners)
-- [ ] Function components
-- [ ] Reconciliation (diffing, keyed children)
+- [x] Function components (props, children, composition, conditional output)
+- [x] Reconciliation (in-place patching, minimal DOM mutations)
+- [ ] Keyed child reconciliation
 - [ ] Hooks (`useState`, `useEffect`)
 - [ ] Event delegation
 - [ ] Examples
@@ -23,7 +24,8 @@ The guiding principle is React's own: **UI is a description, not a construction.
 src/
   core/                element creation, jsx runtime, virtual node model
   dom/                 low-level DOM writes: attributes, properties, styles, listeners
-  renderer/            mounting vnode trees into a container (createRoot)
+  reconciler/          instance tree, mounting, diffing, unmounting
+  renderer/            the public createRoot entry point
   shared/              types, symbols, and JSX type definitions
   jsx-runtime.ts       entry consumed by the automatic JSX transform
   jsx-dev-runtime.ts   dev-transform entry (jsxDEV)
@@ -38,8 +40,10 @@ TSX works end to end without React: `tsconfig.json` sets `"jsx": "react-jsx"` wi
 - **Children are flattened and filtered at creation time.** Nested arrays (the natural output of `list.map(...)`) are flattened, and `null` / `undefined` / booleans are dropped. This is what makes idioms like `cond && <div/>` work, and it means the reconciler can assume a flat array of vnodes.
 - **`key` is extracted out of props.** Keys are reconciliation metadata, not data for the component, so they live on the vnode itself — mirroring React's design. The JSX runtime receives `key` as a separate argument (the React 17+ transform contract) and falls back to a `key` found in spread props.
 - **One normalization path.** `createElement` (classic) and `jsx`/`jsxs` (automatic transform) both funnel children through the same `normalizeChildren`, so every vnode in the system has an identical shape regardless of how it was authored.
-- **The renderer is split from DOM writes.** `renderer/mount.ts` walks the vnode tree and decides _what_ to create; `dom/properties.ts` is the only module that knows _how_ a prop lands on a real node (attribute vs. property, style objects, `on*` listeners). This mirrors React's renderer/host-config split, which is what allows React DOM and React Native to share one reconciler.
-- **`render` currently remounts.** Until the reconciler lands, re-rendering clears the container and mounts fresh. Correct, but O(tree) DOM work per render — the diffing phases exist to fix exactly this.
+- **The reconciler is split from DOM writes.** `reconciler/` walks trees and decides _what_ changes; `dom/properties.ts` is the only module that knows _how_ a prop lands on a real node (attribute vs. property, style objects, `on*` listeners). This mirrors React's renderer/host-config split, which is what allows React DOM and React Native to share one reconciler.
+- **Descriptions and state live in different trees.** VNodes stay immutable; a persistent _instance tree_ (`reconciler/instance.ts`) carries the mutable runtime state: real DOM references, reconciled children, and (soon) hook slots. This is the same separation React draws between elements and fibers.
+- **Diffing follows React's O(n) heuristics.** Same type → patch in place (props diffed key-by-key, children reconciled recursively). Different type → replace the whole subtree. Children match by index for now; the keyed algorithm is the next milestone.
+- **Fragments and components position themselves with anchors.** Neither owns a DOM node, so mounting and patching thread an _anchor_ (the node their content must precede) through the recursion, and a null-rendering component leaves an empty text node as a stable placeholder. This is what keeps `<Maybe/>` toggling between null and content without disturbing siblings.
 
 ## Requirements
 
