@@ -72,10 +72,11 @@ export function reconcileChildren(
   parentDom: Node,
   anchor: Node | null,
 ): Instance[] {
-  for (let i = vnodes.length; i < oldChildren.length; i += 1) {
-    const extra = oldChildren[i]
-    if (extra) {
-      unmountInstance(extra, true)
+  const matches = matchByKey(oldChildren, vnodes)
+  const kept = new Set(matches.filter((match) => match !== undefined))
+  for (const old of oldChildren) {
+    if (!kept.has(old)) {
+      unmountInstance(old, true)
     }
   }
   const result: Instance[] = []
@@ -85,21 +86,52 @@ export function reconcileChildren(
     if (!vnode) {
       continue
     }
-    const old = oldChildren[i]
+    const old = matches[i]
     let next: Instance
-    if (old?.vnode.type === vnode.type) {
+    if (old) {
       next = patchInstance(old, vnode, parentDom, runningAnchor)
+      ensurePosition(next, parentDom, runningAnchor)
     } else {
-      const position = old ? (firstDomOf(old) ?? runningAnchor) : runningAnchor
-      next = mountInstance(vnode, parentDom, position)
-      if (old) {
-        unmountInstance(old, true)
-      }
+      next = mountInstance(vnode, parentDom, runningAnchor)
     }
     result[i] = next
     runningAnchor = firstDomOf(next) ?? runningAnchor
   }
   return result
+}
+
+function matchByKey(oldChildren: Instance[], vnodes: VNode[]): (Instance | undefined)[] {
+  const oldByKey = new Map<string, Instance>()
+  oldChildren.forEach((child, index) => {
+    const key = derivedKey(child.vnode, index)
+    if (!oldByKey.has(key)) {
+      oldByKey.set(key, child)
+    }
+  })
+  const used = new Set<Instance>()
+  return vnodes.map((vnode, index) => {
+    const candidate = oldByKey.get(derivedKey(vnode, index))
+    if (candidate && !used.has(candidate) && candidate.vnode.type === vnode.type) {
+      used.add(candidate)
+      return candidate
+    }
+    return undefined
+  })
+}
+
+function derivedKey(vnode: VNode, index: number): string {
+  return vnode.key === null ? `index:${String(index)}` : `key:${String(vnode.key)}`
+}
+
+function ensurePosition(instance: Instance, parentDom: Node, anchor: Node | null): void {
+  const doms = domNodesOf(instance)
+  const last = doms[doms.length - 1]
+  if (!last || last.nextSibling === anchor) {
+    return
+  }
+  for (const dom of doms) {
+    parentDom.insertBefore(dom, anchor)
+  }
 }
 
 function mountText(vnode: VNode, parentDom: Node, anchor: Node | null): TextInstance {
