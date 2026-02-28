@@ -11,7 +11,7 @@ Under active development. Current progress:
 - [x] DOM renderer (initial mount: host elements, text, fragments, props, listeners)
 - [x] Function components (props, children, composition, conditional output)
 - [x] Reconciliation (in-place patching, minimal DOM mutations)
-- [ ] Keyed child reconciliation
+- [x] Keyed child reconciliation
 - [ ] Hooks (`useState`, `useEffect`)
 - [ ] Event delegation
 - [ ] Examples
