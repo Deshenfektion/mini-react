@@ -1,3 +1,4 @@
+import type { HookSlot } from '../hooks/slots'
 import type { VNode } from '../shared/types'
 
 export type Instance = HostInstance | TextInstance | FragmentInstance | ComponentInstance
@@ -26,7 +27,8 @@ export interface ComponentInstance {
   vnode: VNode
   parentDom: Node
   child: Instance | null
-  hooks: unknown[]
+  hooks: HookSlot[]
+  hookCount: number
   flush: () => void
   unmounted: boolean
 }

@@ -177,6 +177,7 @@ function mountComponent(
     parentDom,
     child: null,
     hooks: [],
+    hookCount: -1,
     flush: () => {
       rerenderComponent(instance)
     },
