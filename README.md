@@ -12,7 +12,8 @@ Under active development. Current progress:
 - [x] Function components (props, children, composition, conditional output)
 - [x] Reconciliation (in-place patching, minimal DOM mutations)
 - [x] Keyed child reconciliation
-- [ ] Hooks (`useState`, `useEffect`)
+- [x] `useState` with batched, scheduled re-renders
+- [ ] `useEffect` and lifecycle cleanup
 - [ ] Event delegation
 - [ ] Examples
 
@@ -24,6 +25,8 @@ The guiding principle is React's own: **UI is a description, not a construction.
 src/
   core/                element creation, jsx runtime, virtual node model
   dom/                 low-level DOM writes: attributes, properties, styles, listeners
+  hooks/               hook dispatcher, slot storage, useState
+  scheduler/           microtask batching of pending re-renders
   reconciler/          instance tree, mounting, diffing, unmounting
   renderer/            the public createRoot entry point
   shared/              types, symbols, and JSX type definitions
@@ -43,6 +46,8 @@ TSX works end to end without React: `tsconfig.json` sets `"jsx": "react-jsx"` wi
 - **The reconciler is split from DOM writes.** `reconciler/` walks trees and decides _what_ changes; `dom/properties.ts` is the only module that knows _how_ a prop lands on a real node (attribute vs. property, style objects, `on*` listeners). This mirrors React's renderer/host-config split, which is what allows React DOM and React Native to share one reconciler.
 - **Descriptions and state live in different trees.** VNodes stay immutable; a persistent _instance tree_ (`reconciler/instance.ts`) carries the mutable runtime state: real DOM references, reconciled children, and (soon) hook slots. This is the same separation React draws between elements and fibers.
 - **Diffing follows React's O(n) heuristics.** Same type → patch in place (props diffed key-by-key, children reconciled recursively). Different type → replace the whole subtree. Children match by index for now; the keyed algorithm is the next milestone.
+- **Hooks are positional slots on the instance, not magic.** Each component instance owns a `hooks` array; every `useState` call claims the next index via a module-level cursor that the reconciler resets before each render. That is the entire mechanism — and it is precisely why hooks must be called unconditionally in the same order. The runtime enforces this by comparing the hook count against the first render and throwing when it changes, which is the honest version of React's dev-mode warning.
+- **State updates are batched through a microtask.** `setState` mutates its slot and enqueues the owning instance's `flush`; the scheduler dedupes by identity in a `Set`, so three updates in one event handler produce exactly one re-render. Updates enqueued _during_ a flush drain in the same cycle rather than waiting for the next tick.
 - **Fragments and components position themselves with anchors.** Neither owns a DOM node, so mounting and patching thread an _anchor_ (the node their content must precede) through the recursion, and a null-rendering component leaves an empty text node as a stable placeholder. This is what keeps `<Maybe/>` toggling between null and content without disturbing siblings.
 
 ## Requirements
