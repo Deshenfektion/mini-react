@@ -1,99 +1,135 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import {
   diffProperties,
   eventNameOf,
+  isEventName,
   isEventProp,
-  setProperty,
   updateProperty,
 } from '../../src/dom/properties'
+import { createEventRoot } from '../../src/events/delegation'
+import type { EventRoot } from '../../src/events/delegation'
 
-function makeDiv(): HTMLElement {
-  return document.createElement('div')
+let container: HTMLElement
+let events: EventRoot
+
+beforeEach(() => {
+  container = document.createElement('div')
+  document.body.replaceChildren(container)
+  events = createEventRoot(container)
+})
+
+function makeChild(tag = 'div'): HTMLElement {
+  const dom = document.createElement(tag)
+  container.appendChild(dom)
+  return dom
 }
 
-describe('setProperty', () => {
+describe('updateProperty', () => {
   it('sets string attributes', () => {
-    const dom = makeDiv()
-    setProperty(dom, 'id', 'app')
+    const dom = makeChild()
+    updateProperty(dom, 'id', undefined, 'app', events)
     expect(dom.getAttribute('id')).toBe('app')
   })
 
   it('sets numeric attributes as strings', () => {
-    const dom = makeDiv()
-    setProperty(dom, 'tabindex', 2)
+    const dom = makeChild()
+    updateProperty(dom, 'tabindex', undefined, 2, events)
     expect(dom.getAttribute('tabindex')).toBe('2')
   })
 
   it('renders true as an empty boolean attribute', () => {
-    const dom = document.createElement('input')
-    setProperty(dom, 'required', true)
+    const dom = makeChild('input')
+    updateProperty(dom, 'required', undefined, true, events)
     expect(dom.hasAttribute('required')).toBe(true)
     expect(dom.getAttribute('required')).toBe('')
   })
 
   it('removes the attribute for false, null, and undefined', () => {
-    const dom = makeDiv()
-    dom.setAttribute('hidden', '')
-    setProperty(dom, 'hidden', false)
+    const dom = makeChild()
+    updateProperty(dom, 'hidden', undefined, true, events)
+    updateProperty(dom, 'hidden', true, false, events)
     expect(dom.hasAttribute('hidden')).toBe(false)
-    dom.setAttribute('title', 'x')
-    setProperty(dom, 'title', null)
+    updateProperty(dom, 'title', undefined, 'x', events)
+    updateProperty(dom, 'title', 'x', null, events)
     expect(dom.hasAttribute('title')).toBe(false)
-    dom.setAttribute('lang', 'en')
-    setProperty(dom, 'lang', undefined)
+    updateProperty(dom, 'lang', undefined, 'en', events)
+    updateProperty(dom, 'lang', 'en', undefined, events)
     expect(dom.hasAttribute('lang')).toBe(false)
   })
 
   it('maps className to the class attribute', () => {
-    const dom = makeDiv()
-    setProperty(dom, 'className', 'card active')
+    const dom = makeChild()
+    updateProperty(dom, 'className', undefined, 'card active', events)
     expect(dom.getAttribute('class')).toBe('card active')
   })
 
   it('assigns value and checked as dom properties', () => {
-    const input = document.createElement('input')
-    setProperty(input, 'value', 'typed')
+    const input = makeChild('input') as HTMLInputElement
+    updateProperty(input, 'value', undefined, 'typed', events)
     expect(input.value).toBe('typed')
-    const checkbox = document.createElement('input')
+    const checkbox = makeChild('input') as HTMLInputElement
     checkbox.type = 'checkbox'
-    setProperty(checkbox, 'checked', true)
+    updateProperty(checkbox, 'checked', undefined, true, events)
     expect(checkbox.checked).toBe(true)
   })
 
   it('applies style objects with camelCase properties', () => {
-    const dom = makeDiv()
-    setProperty(dom, 'style', { color: 'red', backgroundColor: 'blue' })
+    const dom = makeChild()
+    updateProperty(
+      dom,
+      'style',
+      undefined,
+      { color: 'red', backgroundColor: 'blue' },
+      events,
+    )
     expect(dom.style.color).toBe('red')
     expect(dom.style.backgroundColor).toBe('blue')
   })
 
   it('applies css custom properties', () => {
-    const dom = makeDiv()
-    setProperty(dom, 'style', { '--gap': '4px' })
+    const dom = makeChild()
+    updateProperty(dom, 'style', undefined, { '--gap': '4px' }, events)
     expect(dom.style.getPropertyValue('--gap')).toBe('4px')
   })
 
   it('applies style strings', () => {
-    const dom = makeDiv()
-    setProperty(dom, 'style', 'color: green')
+    const dom = makeChild()
+    updateProperty(dom, 'style', undefined, 'color: green', events)
     expect(dom.style.color).toBe('green')
   })
 
-  it('attaches event listeners for on-prefixed function props', () => {
-    const dom = makeDiv()
-    let clicks = 0
-    setProperty(dom, 'onClick', () => {
-      clicks += 1
-    })
-    dom.dispatchEvent(new Event('click'))
-    dom.dispatchEvent(new Event('click'))
-    expect(clicks).toBe(2)
+  it('replaces the full style declaration', () => {
+    const dom = makeChild()
+    updateProperty(dom, 'style', undefined, { color: 'red', margin: '4px' }, events)
+    updateProperty(
+      dom,
+      'style',
+      { color: 'red', margin: '4px' },
+      { color: 'blue' },
+      events,
+    )
+    expect(dom.style.color).toBe('blue')
+    expect(dom.style.margin).toBe('')
   })
-})
 
-describe('updateProperty', () => {
-  it('replaces an event listener without stacking', () => {
-    const dom = makeDiv()
+  it('registers event handlers that fire through the root', () => {
+    const dom = makeChild()
+    let clicks = 0
+    updateProperty(
+      dom,
+      'onClick',
+      undefined,
+      () => {
+        clicks += 1
+      },
+      events,
+    )
+    dom.dispatchEvent(new Event('click', { bubbles: true }))
+    expect(clicks).toBe(1)
+  })
+
+  it('replaces an event handler without stacking', () => {
+    const dom = makeChild()
     let firstCalls = 0
     let secondCalls = 0
     const first = () => {
@@ -102,66 +138,63 @@ describe('updateProperty', () => {
     const second = () => {
       secondCalls += 1
     }
-    updateProperty(dom, 'onClick', undefined, first)
-    updateProperty(dom, 'onClick', first, second)
-    dom.dispatchEvent(new Event('click'))
+    updateProperty(dom, 'onClick', undefined, first, events)
+    updateProperty(dom, 'onClick', first, second, events)
+    dom.dispatchEvent(new Event('click', { bubbles: true }))
     expect(firstCalls).toBe(0)
     expect(secondCalls).toBe(1)
   })
 
-  it('removes an event listener when the next value is gone', () => {
-    const dom = makeDiv()
+  it('removes an event handler when the next value is gone', () => {
+    const dom = makeChild()
     let calls = 0
     const handler = () => {
       calls += 1
     }
-    updateProperty(dom, 'onClick', undefined, handler)
-    updateProperty(dom, 'onClick', handler, undefined)
-    dom.dispatchEvent(new Event('click'))
+    updateProperty(dom, 'onClick', undefined, handler, events)
+    updateProperty(dom, 'onClick', handler, undefined, events)
+    dom.dispatchEvent(new Event('click', { bubbles: true }))
     expect(calls).toBe(0)
-  })
-
-  it('replaces the full style declaration', () => {
-    const dom = makeDiv()
-    updateProperty(dom, 'style', undefined, { color: 'red', margin: '4px' })
-    updateProperty(dom, 'style', { color: 'red', margin: '4px' }, { color: 'blue' })
-    expect(dom.style.color).toBe('blue')
-    expect(dom.style.margin).toBe('')
   })
 })
 
 describe('diffProperties', () => {
   it('removes props absent from the next render', () => {
-    const dom = makeDiv()
-    diffProperties(dom, {}, { id: 'a', title: 'x' })
-    diffProperties(dom, { id: 'a', title: 'x' }, { id: 'a' })
+    const dom = makeChild()
+    diffProperties(dom, {}, { id: 'a', title: 'x' }, events)
+    diffProperties(dom, { id: 'a', title: 'x' }, { id: 'a' }, events)
     expect(dom.getAttribute('id')).toBe('a')
     expect(dom.hasAttribute('title')).toBe(false)
   })
 
   it('updates only changed props', () => {
-    const dom = makeDiv()
-    diffProperties(dom, {}, { id: 'a', lang: 'en' })
+    const dom = makeChild()
+    diffProperties(dom, {}, { id: 'a', lang: 'en' }, events)
     dom.setAttribute('id', 'mutated-outside')
-    diffProperties(dom, { id: 'a', lang: 'en' }, { id: 'a', lang: 'de' })
+    diffProperties(dom, { id: 'a', lang: 'en' }, { id: 'a', lang: 'de' }, events)
     expect(dom.getAttribute('id')).toBe('mutated-outside')
     expect(dom.getAttribute('lang')).toBe('de')
   })
 
   it('ignores the children prop', () => {
-    const dom = makeDiv()
-    diffProperties(dom, {}, { children: [] })
+    const dom = makeChild()
+    diffProperties(dom, {}, { children: [] }, events)
     expect(dom.attributes).toHaveLength(0)
   })
 })
 
 describe('event prop helpers', () => {
-  it('recognizes only on-prefixed functions', () => {
+  it('recognizes on-prefixed names', () => {
+    expect(isEventName('onClick')).toBe(true)
+    expect(isEventName('once')).toBe(true)
+    expect(isEventName('on')).toBe(false)
+    expect(isEventName('id')).toBe(false)
+  })
+
+  it('recognizes only on-prefixed functions as handlers', () => {
     const handler = () => undefined
     expect(isEventProp('onClick', handler)).toBe(true)
     expect(isEventProp('onClick', 'not a function')).toBe(false)
-    expect(isEventProp('once', handler)).toBe(true)
-    expect(isEventProp('on', handler)).toBe(false)
     expect(isEventProp('id', handler)).toBe(false)
   })
 

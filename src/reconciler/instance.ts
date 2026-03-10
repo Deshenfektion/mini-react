@@ -1,3 +1,4 @@
+import type { EventRoot } from '../events/delegation'
 import type { HookSlot } from '../hooks/slots'
 import type { VNode } from '../shared/types'
 
@@ -26,6 +27,7 @@ export interface ComponentInstance {
   kind: 'component'
   vnode: VNode
   parentDom: Node
+  events: EventRoot
   child: Instance | null
   hooks: HookSlot[]
   hookCount: number

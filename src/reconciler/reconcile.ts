@@ -1,4 +1,5 @@
 import { diffProperties, updateProperty } from '../dom/properties'
+import type { EventRoot } from '../events/delegation'
 import { FRAGMENT, TEXT_ELEMENT } from '../shared/symbols'
 import type { Props, VNode } from '../shared/types'
 import { renderComponent } from './component'
@@ -16,18 +17,19 @@ export function mountInstance(
   vnode: VNode,
   parentDom: Node,
   anchor: Node | null,
+  events: EventRoot,
 ): Instance {
   const { type } = vnode
   if (type === TEXT_ELEMENT) {
     return mountText(vnode, parentDom, anchor)
   }
   if (type === FRAGMENT) {
-    return mountFragment(vnode, parentDom, anchor)
+    return mountFragment(vnode, parentDom, anchor, events)
   }
   if (typeof type === 'string') {
-    return mountHost(vnode, type, parentDom, anchor)
+    return mountHost(vnode, type, parentDom, anchor, events)
   }
-  return mountComponent(vnode, parentDom, anchor)
+  return mountComponent(vnode, parentDom, anchor, events)
 }
 
 export function patchInstance(
@@ -35,19 +37,20 @@ export function patchInstance(
   vnode: VNode,
   parentDom: Node,
   anchor: Node | null,
+  events: EventRoot,
 ): Instance {
   if (instance.vnode.type !== vnode.type) {
-    return replaceInstance(instance, vnode, parentDom, anchor)
+    return replaceInstance(instance, vnode, parentDom, anchor, events)
   }
   switch (instance.kind) {
     case 'text':
       return patchText(instance, vnode)
     case 'host':
-      return patchHost(instance, vnode)
+      return patchHost(instance, vnode, events)
     case 'fragment':
-      return patchFragment(instance, vnode, parentDom, anchor)
+      return patchFragment(instance, vnode, parentDom, anchor, events)
     case 'component':
-      return patchComponent(instance, vnode, parentDom, anchor)
+      return patchComponent(instance, vnode, parentDom, anchor, events)
   }
 }
 
@@ -63,6 +66,7 @@ export function rerenderComponent(instance: ComponentInstance): void {
     renderComponent(instance),
     instance.parentDom,
     anchor,
+    instance.events,
   )
 }
 
@@ -71,6 +75,7 @@ export function reconcileChildren(
   vnodes: VNode[],
   parentDom: Node,
   anchor: Node | null,
+  events: EventRoot,
 ): Instance[] {
   const matches = matchByKey(oldChildren, vnodes)
   const kept = new Set(matches.filter((match) => match !== undefined))
@@ -89,10 +94,10 @@ export function reconcileChildren(
     const old = matches[i]
     let next: Instance
     if (old) {
-      next = patchInstance(old, vnode, parentDom, runningAnchor)
+      next = patchInstance(old, vnode, parentDom, runningAnchor, events)
       ensurePosition(next, parentDom, runningAnchor)
     } else {
-      next = mountInstance(vnode, parentDom, runningAnchor)
+      next = mountInstance(vnode, parentDom, runningAnchor, events)
     }
     result[i] = next
     runningAnchor = firstDomOf(next) ?? runningAnchor
@@ -145,14 +150,15 @@ function mountHost(
   tag: string,
   parentDom: Node,
   anchor: Node | null,
+  events: EventRoot,
 ): HostInstance {
   const dom = document.createElement(tag)
   for (const name of Object.keys(vnode.props)) {
     if (name !== 'children') {
-      updateProperty(dom, name, undefined, vnode.props[name])
+      updateProperty(dom, name, undefined, vnode.props[name], events)
     }
   }
-  const children = mountAll(vnode.props.children, dom, null)
+  const children = mountAll(vnode.props.children, dom, null, events)
   parentDom.insertBefore(dom, anchor)
   return { kind: 'host', vnode, dom, children }
 }
@@ -161,8 +167,9 @@ function mountFragment(
   vnode: VNode,
   parentDom: Node,
   anchor: Node | null,
+  events: EventRoot,
 ): FragmentInstance {
-  const children = mountAll(vnode.props.children, parentDom, anchor)
+  const children = mountAll(vnode.props.children, parentDom, anchor, events)
   return { kind: 'fragment', vnode, children }
 }
 
@@ -170,11 +177,13 @@ function mountComponent(
   vnode: VNode,
   parentDom: Node,
   anchor: Node | null,
+  events: EventRoot,
 ): ComponentInstance {
   const instance: ComponentInstance = {
     kind: 'component',
     vnode,
     parentDom,
+    events,
     child: null,
     hooks: [],
     hookCount: -1,
@@ -183,7 +192,7 @@ function mountComponent(
     },
     unmounted: false,
   }
-  instance.child = mountInstance(renderComponent(instance), parentDom, anchor)
+  instance.child = mountInstance(renderComponent(instance), parentDom, anchor, events)
   return instance
 }
 
@@ -191,11 +200,12 @@ function mountAll(
   vnodes: VNode[] | undefined,
   parentDom: Node,
   anchor: Node | null,
+  events: EventRoot,
 ): Instance[] {
   if (!vnodes) {
     return []
   }
-  return vnodes.map((vnode) => mountInstance(vnode, parentDom, anchor))
+  return vnodes.map((vnode) => mountInstance(vnode, parentDom, anchor, events))
 }
 
 function patchText(instance: TextInstance, vnode: VNode): TextInstance {
@@ -207,13 +217,18 @@ function patchText(instance: TextInstance, vnode: VNode): TextInstance {
   return instance
 }
 
-function patchHost(instance: HostInstance, vnode: VNode): HostInstance {
-  diffProperties(instance.dom, instance.vnode.props, vnode.props)
+function patchHost(
+  instance: HostInstance,
+  vnode: VNode,
+  events: EventRoot,
+): HostInstance {
+  diffProperties(instance.dom, instance.vnode.props, vnode.props, events)
   instance.children = reconcileChildren(
     instance.children,
     vnode.props.children ?? [],
     instance.dom,
     null,
+    events,
   )
   instance.vnode = vnode
   return instance
@@ -224,12 +239,14 @@ function patchFragment(
   vnode: VNode,
   parentDom: Node,
   anchor: Node | null,
+  events: EventRoot,
 ): FragmentInstance {
   instance.children = reconcileChildren(
     instance.children,
     vnode.props.children ?? [],
     parentDom,
     anchor,
+    events,
   )
   instance.vnode = vnode
   return instance
@@ -240,15 +257,18 @@ function patchComponent(
   vnode: VNode,
   parentDom: Node,
   anchor: Node | null,
+  events: EventRoot,
 ): ComponentInstance {
   instance.vnode = vnode
   instance.parentDom = parentDom
+  instance.events = events
   if (instance.child) {
     instance.child = patchInstance(
       instance.child,
       renderComponent(instance),
       parentDom,
       anchor,
+      events,
     )
   }
   return instance
@@ -259,9 +279,10 @@ function replaceInstance(
   vnode: VNode,
   parentDom: Node,
   anchor: Node | null,
+  events: EventRoot,
 ): Instance {
   const position = firstDomOf(instance) ?? anchor
-  const next = mountInstance(vnode, parentDom, position)
+  const next = mountInstance(vnode, parentDom, position, events)
   unmountInstance(instance, true)
   return next
 }

@@ -1,24 +1,23 @@
+import { setEventHandler } from '../events/delegation'
+import type { EventRoot } from '../events/delegation'
 import type { Props } from '../shared/types'
-
-export function setProperty(dom: HTMLElement, name: string, value: unknown): void {
-  updateProperty(dom, name, undefined, value)
-}
 
 export function updateProperty(
   dom: HTMLElement,
   name: string,
   prev: unknown,
   next: unknown,
+  events: EventRoot,
 ): void {
   if (name === 'style') {
     applyStyle(dom, next)
-  } else if (isEventLikeProp(name, prev, next)) {
-    if (isEventProp(name, prev)) {
-      dom.removeEventListener(eventNameOf(name), prev)
-    }
-    if (isEventProp(name, next)) {
-      dom.addEventListener(eventNameOf(name), next)
-    }
+  } else if (isEventName(name)) {
+    setEventHandler(
+      events,
+      dom,
+      eventNameOf(name),
+      isEventProp(name, next) ? next : undefined,
+    )
   } else if (name === 'className') {
     setAttributeValue(dom, 'class', next)
   } else if (name === 'value' || name === 'checked') {
@@ -28,10 +27,15 @@ export function updateProperty(
   }
 }
 
-export function diffProperties(dom: HTMLElement, prev: Props, next: Props): void {
+export function diffProperties(
+  dom: HTMLElement,
+  prev: Props,
+  next: Props,
+  events: EventRoot,
+): void {
   for (const name of Object.keys(prev)) {
     if (name !== 'children' && !(name in next)) {
-      updateProperty(dom, name, prev[name], undefined)
+      updateProperty(dom, name, prev[name], undefined, events)
     }
   }
   for (const name of Object.keys(next)) {
@@ -41,21 +45,17 @@ export function diffProperties(dom: HTMLElement, prev: Props, next: Props): void
     const prevValue = prev[name]
     const nextValue = next[name]
     if (prevValue !== nextValue) {
-      updateProperty(dom, name, prevValue, nextValue)
+      updateProperty(dom, name, prevValue, nextValue, events)
     }
   }
 }
 
-function isEventLikeProp(name: string, prev: unknown, next: unknown): boolean {
-  return (
-    name.length > 2 &&
-    name.startsWith('on') &&
-    (typeof prev === 'function' || typeof next === 'function')
-  )
+export function isEventName(name: string): boolean {
+  return name.length > 2 && name.startsWith('on')
 }
 
 export function isEventProp(name: string, value: unknown): value is EventListener {
-  return name.length > 2 && name.startsWith('on') && typeof value === 'function'
+  return isEventName(name) && typeof value === 'function'
 }
 
 export function eventNameOf(propName: string): string {
