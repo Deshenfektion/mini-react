@@ -25,5 +25,11 @@ export default tseslint.config(
       '@typescript-eslint/no-namespace': 'off',
     },
   },
+  {
+    files: ['src/hooks/slots.ts'],
+    rules: {
+      '@typescript-eslint/no-invalid-void-type': 'off',
+    },
+  },
   prettier,
 )

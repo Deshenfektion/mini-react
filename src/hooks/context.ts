@@ -29,7 +29,7 @@ export function activeInstance(): ComponentInstance {
   return current
 }
 
-export function claimSlot<S extends HookSlot>(create: () => S): S {
+export function claimSlot<S extends HookSlot>(kind: S['kind'], create: () => S): S {
   const instance = activeInstance()
   const index = cursor
   cursor += 1
@@ -41,5 +41,9 @@ export function claimSlot<S extends HookSlot>(create: () => S): S {
     instance.hooks.push(slot)
     return slot
   }
-  return instance.hooks[index] as S
+  const existing = instance.hooks[index]
+  if (existing?.kind !== kind) {
+    throw new Error('Hook order changed between renders')
+  }
+  return existing as S
 }

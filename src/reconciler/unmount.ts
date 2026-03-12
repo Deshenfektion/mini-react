@@ -1,3 +1,4 @@
+import { cancelEffect } from '../hooks/effects'
 import type { Instance } from './instance'
 
 export function unmountInstance(instance: Instance, removeDom: boolean): void {
@@ -21,10 +22,15 @@ export function unmountInstance(instance: Instance, removeDom: boolean): void {
       }
       return
     case 'component':
+      instance.unmounted = true
+      for (const slot of instance.hooks) {
+        if (slot.kind === 'effect') {
+          cancelEffect(slot)
+        }
+      }
       if (instance.child) {
         unmountInstance(instance.child, removeDom)
       }
-      instance.unmounted = true
       return
   }
 }

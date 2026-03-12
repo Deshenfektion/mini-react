@@ -6,7 +6,7 @@ export type StateUpdate<T> = T | ((previous: T) => T)
 export type StateSetter<T> = (update: StateUpdate<T>) => void
 
 export function useState<T>(initial: T | (() => T)): [T, StateSetter<T>] {
-  const slot = claimSlot<StateSlot>(createStateSlot(initial))
+  const slot = claimSlot<StateSlot>('state', createStateSlot(initial))
   return [slot.value as T, slot.set]
 }
 
